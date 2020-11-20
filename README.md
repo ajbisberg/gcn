@@ -25,6 +25,14 @@ cd gcn
 python train.py
 ```
 
+## Run with LoL data
+Set the `data_path` variable in `train_lol.py` to point at the right CSV.
+
+```bash
+cd gcn
+python train_lol.py
+```
+
 ## Data
 
 In order to use your own data, you have to provide 

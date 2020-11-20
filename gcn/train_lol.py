@@ -26,7 +26,7 @@ flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of e
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 
 # Load data
-data_path = data_path =  '..\\..\\deep-learning-class-project\\data\\2020_LoL_esports_match_data_from_OraclesElixir_20201005.csv'
+data_path = '..\\..\\deep-learning-class-project\\data\\2020_LoL_esports_match_data_from_OraclesElixir_20201005.csv'
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data_lol(data_path)
 
 # Some preprocessing
