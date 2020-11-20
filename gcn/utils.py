@@ -3,7 +3,13 @@ import pickle as pkl
 import networkx as nx
 import scipy.sparse as sp
 from scipy.sparse.linalg.eigen.arpack import eigsh
+from scipy.sparse import csr_matrix,lil_matrix
 import sys
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from math import floor
+seed = 123
 
 
 def parse_index_file(filename):
@@ -20,6 +26,109 @@ def sample_mask(idx, l):
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
 
+def adj_from_features(teams,feat_cols):
+    ordered_teams = list(teams.sort_values(['date','team'])['team'].unique())
+    ordered_games = list(teams.sort_values(['date','gameid'])['gameid'].unique())
+    teams['adj_team_idx'] = teams['team'].apply(lambda team: ordered_teams.index(team))
+    teams['adj_game_idx'] = teams['gameid'].apply(lambda game: ordered_games.index(game))
+    srt_teams = teams.sort_values(['adj_team_idx','adj_game_idx']).reset_index()
+
+    adj = np.zeros([len(teams),len(teams)])
+    team_name = ''
+    for i,row in srt_teams.iterrows():
+        if row['team'] == team_name:
+            # related to next game
+            adj[i,i-1] = 1
+        else:
+            team_name = row['team']
+        opp = srt_teams[(srt_teams['adj_game_idx'] == row['adj_game_idx']) & (srt_teams['team'] != row['team'])].index[0]
+        adj[i,opp] = 1 
+
+    labels = [[0,0] for r in range(adj.shape[0])]
+    label_idx = []
+    ul_idx = []
+    curr_team = ordered_teams[0]
+    for i,row in srt_teams.iterrows():
+        if i < len(srt_teams) -1:
+            if curr_team == srt_teams.iloc[i+1]['team']:
+                labels[i] = [1,0] if srt_teams.iloc[i+1]['result'] == 1 else [0,1]
+                label_idx.append(i)
+            else:
+                curr_team = srt_teams.iloc[i+1]['team']
+                ul_idx.append(i)
+        if i == len(srt_teams)-1:
+            ul_idx.append(i)
+
+    return (
+        csr_matrix(adj,dtype=np.float32), 
+        lil_matrix(srt_teams[feat_cols].values,dtype=np.float32), 
+        np.array(labels), 
+        np.array(label_idx)
+    )
+
+def train_val_split_idx(train_pct,val_pct,label_idx):
+    tr = floor(len(label_idx)*train_pct)
+    val = floor(len(label_idx)*val_pct)
+    np.random.seed(seed)
+    tr_idx = np.random.choice(label_idx,tr,replace=False)
+    remaining_idx = list(set(label_idx) - set(tr_idx))
+    val_idx = np.random.choice(remaining_idx,val,replace=False)
+    test_idx = np.array(list(set(remaining_idx) - set(val_idx)))
+    return tr_idx, val_idx, test_idx
+
+def load_data_lol(dataset_path):
+    """
+    Loads input data from OE CSV 
+
+    :param dataset_path: path to dataset
+    :return: All data input files loaded (as well the training/test data).
+    """
+    print(" \n Begin processing data... \n")
+    lol = pd.read_csv(dataset_path)
+    info = ['datacompleteness','gameid','year','split','playoffs','patch','date','league','team','gamelength']
+    small_info = ['date','gameid','team',]
+    obj = ['side','dragons','heralds','barons','towers','inhibitors',] # 'firstdragon','firstmidtower','firsttothreetowers','elders', 'elementaldrakes','firsttower','firstbaron'
+    farm = ['monsterkills', 'monsterkillsenemyjungle', 'monsterkillsownjungle',] #'total cs','minionkills'
+    goldxp = ['golddiffat10', 'golddiffat15','totalgold','earnedgold','xpdiffat10','xpdiffat15'] # 
+    fights = ['firstblood','kills','assists','deaths','doublekills','triplekills','quadrakills','pentakills', 'damagetochampions', 'damagemitigatedperminute','damagetakenperminute' ]
+    vision = ['controlwardsbought', 'visionscore', 'wardskilled', 'wardsplaced',] 
+    res = ['result',]
+
+    binary_cols = ['side','firstblood','result'] # 'firstdragon','firstbaron','firsttower', 'firsttothreetowers', 'firstmidtower',
+    data_cols = obj+farm+goldxp+fights+vision
+    cont_cols = [c for c in data_cols if c not in binary_cols]
+
+    teams = lol[lol['player'].isna()][info+data_cols+res]
+    teams = teams.dropna(subset=['doublekills','triplekills','quadrakills','pentakills',])
+    teams['date'] = pd.to_datetime(teams['date'])
+    teams['side'] = [1 if s=='Red' else 0 for s in teams['side']]
+
+    imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+    teams[data_cols] = imputer.fit_transform(teams[data_cols].astype('float32'))
+    ss = StandardScaler()
+    teams[data_cols] = ss.fit_transform(teams[data_cols])
+
+    # let's start out with a small dataset
+    teams = teams[teams['league'].isin(['LPL','LCK','LEC','LCS'])]
+    adj, features, labels, label_idx = adj_from_features(teams,data_cols+res)
+    # print(adj.shape, features.shape, labels.shape, label_idx.shape)
+    # print(type(adj), type(features))
+    # print(features)
+    idx_train, idx_val, idx_test = train_val_split_idx(0.7,0.1,label_idx)
+
+    train_mask = sample_mask(idx_train, labels.shape[0])
+    val_mask = sample_mask(idx_val, labels.shape[0])
+    test_mask = sample_mask(idx_test, labels.shape[0])
+
+    y_train = np.zeros(labels.shape)
+    y_val = np.zeros(labels.shape)
+    y_test = np.zeros(labels.shape)
+    y_train[train_mask, :] = labels[train_mask, :]
+    y_val[val_mask, :] = labels[val_mask, :]
+    y_test[test_mask, :] = labels[test_mask, :]
+    print(" \n Data processed \n")
+
+    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
 def load_data(dataset_str):
     """
@@ -51,6 +160,14 @@ def load_data(dataset_str):
                 objects.append(pkl.load(f))
 
     x, y, tx, ty, allx, ally, graph = tuple(objects)
+    print(
+        'the feature vectors of both labeled and unlabeled training instances : {}\n'.format(allx.shape),
+        'the feature vectors of the training instances as scipy.sparse.csr.csr_matrix object :{}\n'.format(x.shape),
+        'the feature vectors of the test instances as scipy.sparse.csr.csr_matrix object : {}\n'.format(tx.shape))
+    print(
+        'the labels for instances in ind.dataset_str.allx as numpy.ndarray object : {}\n'.format(ally.shape),
+        'he one-hot labels of the test instances as numpy.ndarray object : {}\n'.format(ty.shape)
+    )
     test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset_str))
     test_idx_range = np.sort(test_idx_reorder)
 
@@ -64,17 +181,25 @@ def load_data(dataset_str):
         ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
         ty_extended[test_idx_range-min(test_idx_range), :] = ty
         ty = ty_extended
-
+    
+    # stack training and test features
     features = sp.vstack((allx, tx)).tolil()
     features[test_idx_reorder, :] = features[test_idx_range, :]
     adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
 
+    # stack training and test labels
     labels = np.vstack((ally, ty))
     labels[test_idx_reorder, :] = labels[test_idx_range, :]
+    
+    # print(adj.shape, features.shape, labels.shape)
 
     idx_test = test_idx_range.tolist()
     idx_train = range(len(y))
     idx_val = range(len(y), len(y)+500)
+    
+    print('train ',idx_train)
+    print('val ',idx_val)
+    print('test ',min(idx_test),max(idx_test))
 
     train_mask = sample_mask(idx_train, labels.shape[0])
     val_mask = sample_mask(idx_val, labels.shape[0])
