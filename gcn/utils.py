@@ -26,12 +26,20 @@ def sample_mask(idx, l):
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
 
-def adj_from_features(teams,feat_cols):
+def adj_from_features(teams,cont_cols,bin_cols,use_delta=False):
+    feat_cols = cont_cols + bin_cols
     ordered_teams = list(teams.sort_values(['date','team'])['team'].unique())
     ordered_games = list(teams.sort_values(['date','gameid'])['gameid'].unique())
     teams['adj_team_idx'] = teams['team'].apply(lambda team: ordered_teams.index(team))
     teams['adj_game_idx'] = teams['gameid'].apply(lambda game: ordered_games.index(game))
     srt_teams = teams.sort_values(['adj_team_idx','adj_game_idx']).reset_index()
+
+    labels = [[0,0] for r in range(len(srt_teams))]
+    label_idx = []
+    ul_idx = []
+    curr_team = ordered_teams[0]
+
+    features = []
 
     adj = np.zeros([len(teams),len(teams)])
     team_name = ''
@@ -41,14 +49,13 @@ def adj_from_features(teams,feat_cols):
             adj[i,i-1] = 1
         else:
             team_name = row['team']
-        opp = srt_teams[(srt_teams['adj_game_idx'] == row['adj_game_idx']) & (srt_teams['team'] != row['team'])].index[0]
-        adj[i,opp] = 1 
+        opp = srt_teams[(srt_teams['adj_game_idx'] == row['adj_game_idx']) & (srt_teams['team'] != row['team'])]
+        opp_idx = opp.index[0]
+        if use_delta:
+          delta_feats = np.subtract(row[cont_cols].values, opp[cont_cols].values[0])
+          features.append(np.append(delta_feats,row[bin_cols].values))
+        adj[i,opp_idx] = 1 
 
-    labels = [[0,0] for r in range(adj.shape[0])]
-    label_idx = []
-    ul_idx = []
-    curr_team = ordered_teams[0]
-    for i,row in srt_teams.iterrows():
         if i < len(srt_teams) -1:
             if curr_team == srt_teams.iloc[i+1]['team']:
                 labels[i] = [1,0] if srt_teams.iloc[i+1]['result'] == 1 else [0,1]
@@ -59,9 +66,12 @@ def adj_from_features(teams,feat_cols):
         if i == len(srt_teams)-1:
             ul_idx.append(i)
 
+    if not use_delta:
+      features = srt_teams[feat_cols].values
+  
     return (
-        csr_matrix(adj,dtype=np.float32), 
-        lil_matrix(srt_teams[feat_cols].values,dtype=np.float32), 
+        adj, 
+        np.array(features),
         np.array(labels), 
         np.array(label_idx)
     )
@@ -76,7 +86,7 @@ def train_val_split_idx(train_pct,val_pct,label_idx):
     test_idx = np.array(list(set(remaining_idx) - set(val_idx)))
     return tr_idx, val_idx, test_idx
 
-def load_data_lol(dataset_path):
+def load_data_lol(dataset_paths,data_type):
     """
     Loads input data from OE CSV 
 
@@ -84,7 +94,9 @@ def load_data_lol(dataset_path):
     :return: All data input files loaded (as well the training/test data).
     """
     print(" \n Begin processing data... \n")
-    lol = pd.read_csv(dataset_path)
+    lol = pd.DataFrame()
+    for dp in dataset_paths:
+      lol = lol.append(pd.read_csv(dp))
     info = ['datacompleteness','gameid','year','split','playoffs','patch','date','league','team','gamelength']
     small_info = ['date','gameid','team',]
     obj = ['side','dragons','heralds','barons','towers','inhibitors',] # 'firstdragon','firstmidtower','firsttothreetowers','elders', 'elementaldrakes','firsttower','firstbaron'
@@ -106,19 +118,37 @@ def load_data_lol(dataset_path):
     imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
     teams[data_cols] = imputer.fit_transform(teams[data_cols].astype('float32'))
     ss = StandardScaler()
-    teams[data_cols] = ss.fit_transform(teams[data_cols])
+    # teams[data_cols] = ss.fit_transform(teams[data_cols])
 
-    # let's start out with a small dataset
-    teams = teams[teams['league'].isin(['LPL','LCK','LEC','LCS'])]
-    adj, features, labels, label_idx = adj_from_features(teams,data_cols+res)
-    # print(adj.shape, features.shape, labels.shape, label_idx.shape)
-    # print(type(adj), type(features))
-    # print(features)
-    idx_train, idx_val, idx_test = train_val_split_idx(0.7,0.1,label_idx)
+    # separate datasets for train/test/val
+    train = teams[teams['league'].isin(['LPL'])] # ,'LCK','LEC','LCS']
+    val = teams[teams['league'].isin(['LCK'])]
+    test = teams[teams['league'].isin(['LCS'])]
+    # adj, features, labels, label_idx = adj_from_features(teams,data_cols+res)
+    use_delta = True if data_type == 'delta' else False
+    train_adj, train_features, train_labels, train_label_idx = adj_from_features(train,cont_cols,binary_cols,use_delta)
+    val_adj, val_features, val_labels, val_label_idx = adj_from_features(val,cont_cols,binary_cols,use_delta)
+    test_adj, test_features, test_labels, test_label_idx = adj_from_features(test,cont_cols,binary_cols,use_delta)
+    #
+    train_features[:,0:len(cont_cols)] = ss.fit_transform(train_features[:,0:len(cont_cols)])
+    val_features[:,0:len(cont_cols)] = ss.fit_transform(val_features[:,0:len(cont_cols)])
+    test_features[:,0:len(cont_cols)] = ss.fit_transform(test_features[:,0:len(cont_cols)])
+    #
+    l_tr = train_adj.shape[0]
+    l_val = val_adj.shape[0]
+    l_test = test_adj.shape[0]
+    all_data_len = l_tr + l_val + l_test
+    adj = np.zeros((all_data_len,all_data_len))
+    adj[:l_tr,:l_tr] = train_adj
+    adj[l_tr:l_tr+l_val,l_tr:l_tr+l_val] = val_adj
+    adj[l_tr+l_val:all_data_len,l_tr+l_val:all_data_len] = test_adj
+    
+    features = np.vstack((train_features,val_features,test_features))
+    labels = np.vstack((train_labels,val_labels,test_labels))
 
-    train_mask = sample_mask(idx_train, labels.shape[0])
-    val_mask = sample_mask(idx_val, labels.shape[0])
-    test_mask = sample_mask(idx_test, labels.shape[0])
+    train_mask = sample_mask(train_label_idx, len(features))
+    val_mask = sample_mask(np.add(val_label_idx,l_tr), len(features))
+    test_mask = sample_mask(np.add(test_label_idx,l_tr+l_val), len(features))
 
     y_train = np.zeros(labels.shape)
     y_val = np.zeros(labels.shape)
@@ -128,7 +158,7 @@ def load_data_lol(dataset_path):
     y_test[test_mask, :] = labels[test_mask, :]
     print(" \n Data processed \n")
 
-    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
+    return csr_matrix(adj,dtype=np.float32), lil_matrix(features,dtype=np.float32), y_train, y_val, y_test, train_mask, val_mask, test_mask
 
 def load_data(dataset_str):
     """

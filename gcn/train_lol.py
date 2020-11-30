@@ -15,19 +15,25 @@ tf.set_random_seed(seed)
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_string('dataset', 'cora', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
+flags.DEFINE_string('dataset', 'default', 'Dataset string.')  # 'delta'
+flags.DEFINE_string('seasons', '2020', 'Seasons to include.')  # '2014 - 2020, comma separated'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 16, 'Number of units in hidden layer 1.')
+flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
 flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 
 # Load data
-data_path = '..\\..\\deep-learning-class-project\\data\\2020_LoL_esports_match_data_from_OraclesElixir_20201005.csv'
-adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data_lol(data_path)
+data_root = '..\\..\\deep-learning-class-project\\data\\'
+seasons = FLAGS.seasons.split(',')
+data_paths = []
+for year in seasons:
+  data_paths.append('{}{}_LoL_esports_match_data_from_OraclesElixir_20201005.csv'.format(data_root,year))
+adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data_lol(data_paths,FLAGS.dataset)
 
 # Some preprocessing
 features = preprocess_features(features)
