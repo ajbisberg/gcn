@@ -26,12 +26,12 @@ def sample_mask(idx, l):
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
 
-def adj_from_features(teams,cont_cols,bin_cols,use_delta=False):
+def adj_from_features(teams,cont_cols,bin_cols,use_delta=False,hide_features=False):
     feat_cols = cont_cols + bin_cols
     ordered_teams = list(teams.sort_values(['date','team'])['team'].unique())
     ordered_games = list(teams.sort_values(['date','gameid'])['gameid'].unique())
-    teams['adj_team_idx'] = teams['team'].apply(lambda team: ordered_teams.index(team))
-    teams['adj_game_idx'] = teams['gameid'].apply(lambda game: ordered_games.index(game))
+    teams.loc[:,'adj_team_idx'] = teams['team'].apply(lambda team: ordered_teams.index(team))
+    teams.loc[:,'adj_game_idx'] = teams['gameid'].apply(lambda game: ordered_games.index(game))
     srt_teams = teams.sort_values(['adj_team_idx','adj_game_idx']).reset_index()
 
     labels = [[0,0] for r in range(len(srt_teams))]
@@ -54,16 +54,18 @@ def adj_from_features(teams,cont_cols,bin_cols,use_delta=False):
         if use_delta:
           delta_feats = np.subtract(row[cont_cols].values, opp[cont_cols].values[0])
           features.append(np.append(delta_feats,row[bin_cols].values))
-        adj[i,opp_idx] = 1 
-
-        if i < len(srt_teams) -1:
-            if curr_team == srt_teams.iloc[i+1]['team']:
-                labels[i] = [1,0] if srt_teams.iloc[i+1]['result'] == 1 else [0,1]
+        adj[i,opp_idx] = 1
+        
+        look_ahead = 1
+        if i < len(srt_teams) - look_ahead:
+            team = srt_teams.iloc[i+look_ahead]
+            if curr_team == team['team']:
+                labels[i] = [1,0] if team['result'] == 1 else [0,1]
                 label_idx.append(i)
             else:
-                curr_team = srt_teams.iloc[i+1]['team']
+                curr_team = team['team']
                 ul_idx.append(i)
-        if i == len(srt_teams)-1:
+        else:
             ul_idx.append(i)
 
     if not use_delta:
@@ -86,7 +88,7 @@ def train_val_split_idx(train_pct,val_pct,label_idx):
     test_idx = np.array(list(set(remaining_idx) - set(val_idx)))
     return tr_idx, val_idx, test_idx
 
-def load_data_lol(dataset_paths,data_type):
+def load_data_lol(dataset_paths,data_type,data_division):
     """
     Loads input data from OE CSV 
 
@@ -121,9 +123,10 @@ def load_data_lol(dataset_paths,data_type):
     # teams[data_cols] = ss.fit_transform(teams[data_cols])
 
     # separate datasets for train/test/val
-    train = teams[teams['league'].isin(['LPL'])] # ,'LCK','LEC','LCS']
-    val = teams[teams['league'].isin(['LCK'])]
-    test = teams[teams['league'].isin(['LCS'])]
+    train_leagues, val_leagues, test_leagues = data_division
+    train = teams[teams['league'].isin(train_leagues)] # ,'LCK','LEC','LCS']
+    val = teams[teams['league'].isin(val_leagues)]
+    test = teams[teams['league'].isin(test_leagues)]
     # adj, features, labels, label_idx = adj_from_features(teams,data_cols+res)
     use_delta = True if data_type == 'delta' else False
     train_adj, train_features, train_labels, train_label_idx = adj_from_features(train,cont_cols,binary_cols,use_delta)
@@ -158,7 +161,7 @@ def load_data_lol(dataset_paths,data_type):
     y_test[test_mask, :] = labels[test_mask, :]
     print(" \n Data processed \n")
 
-    return csr_matrix(adj,dtype=np.float32), lil_matrix(features,dtype=np.float32), y_train, y_val, y_test, train_mask, val_mask, test_mask
+    return csr_matrix(adj,dtype=np.float32), lil_matrix(features,dtype=np.float32), y_train, y_val, y_test, train_mask, val_mask, test_mask, data_cols+res
 
 def load_data(dataset_str):
     """
@@ -273,6 +276,8 @@ def preprocess_features(features):
     features = r_mat_inv.dot(features)
     return sparse_to_tuple(features)
 
+def check_symmetric(a, rtol=1e-05, atol=1e-08):
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
 
 def normalize_adj(adj):
     """Symmetrically normalize adjacency matrix."""
@@ -283,6 +288,12 @@ def normalize_adj(adj):
     d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
     return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo()
 
+def row_normalize(adj):
+    """Row normalizes adjacency matrix."""
+    adj = sp.coo_matrix(adj)
+    rowsum = np.array(adj.sum(1))
+    rowsum[rowsum == 0.] = 0.0001
+    return csr_matrix(adj / rowsum).tocoo()
 
 def preprocess_adj(adj):
     """Preprocessing of adjacency matrix for simple GCN model and conversion to tuple representation."""

@@ -4,7 +4,6 @@ from gcn.metrics import *
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-
 class Model(object):
     def __init__(self, **kwargs):
         allowed_kwargs = {'name', 'logging'}
@@ -157,7 +156,6 @@ class GCN(Model):
                                         self.placeholders['labels_mask'])
 
     def _build(self):
-
         self.layers.append(GraphConvolution(input_dim=self.input_dim,
                                             output_dim=FLAGS.hidden1,
                                             placeholders=self.placeholders,
@@ -166,12 +164,26 @@ class GCN(Model):
                                             sparse_inputs=True,
                                             logging=self.logging))
         
-        self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
-                                            output_dim=FLAGS.hidden2,
-                                            placeholders=self.placeholders,
-                                            act=tf.nn.sigmoid,
-                                            dropout=True,
-                                            logging=self.logging))
+        # self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
+        #                                     output_dim=FLAGS.hidden2,
+        #                                     placeholders=self.placeholders,
+        #                                     act=tf.nn.sigmoid,
+        #                                     dropout=True,
+        #                                     logging=self.logging))
+        
+        # self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
+        #                                     output_dim=FLAGS.hidden2,
+        #                                     placeholders=self.placeholders,
+        #                                     act=tf.nn.sigmoid,
+        #                                     dropout=True,
+        #                                     logging=self.logging))
+
+        # self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
+        #                                     output_dim=FLAGS.hidden2,
+        #                                     placeholders=self.placeholders,
+        #                                     act=tf.nn.sigmoid,
+        #                                     dropout=True,
+        #                                     logging=self.logging))
 
         self.layers.append(GraphConvolution(input_dim=FLAGS.hidden2,
                                             output_dim=self.output_dim,

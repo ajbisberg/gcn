@@ -1,0 +1,356 @@
+\documentclass{article}
+
+% if you need to pass options to natbib, use, e.g.:
+%     \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2020
+
+% ready for submission
+% \usepackage{neurips_2020}
+
+% to compile a preprint version, e.g., for submission to arXiv, add add the
+% [preprint] option:
+\usepackage[preprint,nonatbib]{neurips_2020}
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+% \usepackage[final]{neurips_2020}
+
+% to avoid loading the natbib package, add option nonatbib:
+% \usepackage[nonatbib]{neurips_2020}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+% graphics stuff
+\usepackage{graphicx}
+\graphicspath{ {images/} }
+% bib stuff
+\usepackage{biblatex}
+\addbibresource{refs.bib}
+
+\title{CS 699 Project Final Report \\
+ \normalfont{DeepSkill: Win Prediction and Matchmaking Framework for Elite Individuals and Teams}}
+ 
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to break the
+% lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
+% authors names on the first line, and the last on the second line, try using
+% \AND instead of \And before the third author name.
+
+\author{
+  James Enouen\\
+  Viterbi School of Engineering\\
+  University of Southern California\\
+  Los Angeles, CA 90089 \\
+  \texttt{enouen@usc.edu} \\
+   \And
+  Alexander J. Bisberg \\
+  Viterbi School of Engineering\\\
+  University of Southern California\\
+  Los Angeles, CA 90089 \\
+  \texttt{bisberg@usc.edu} \\
+}
+
+
+%%%%%%%%%% Requirements %%%%%%%%%
+\iffalse
+Please submit a 4-page midterm report for your course project.
+
+You should use the NeurIPS format for the proposal: 
+
+Please include important information such as team members, data description, preliminary results.
+\fi
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  This is our midterm update for the CS 699 class project. Our team includes first year students James Enouen and Alex Bisberg. We plan to pursue a project to use deep neural nets to create embeddings of players and teams in the popular multiplayer video game, League of Legends (LoL), and possibly expand it to other games or sports.
+\end{abstract}
+
+\section{Background and Motivation}
+% We consider applying deep learning to games outcomes and scores with three primary lenses:
+
+\subsection{Team Based Prediction}
+By focusing on high skill or professional teams, we believe we can make some simplifying assumptions to our model. 
+Over a season, we plan to assume a professional player's skill is static, therefore removing the time sensitive aspect of traditional skill models.
+Moreover, by utilizing a season of competitive games amongst a certain organization as data, we intend to be able to build a model which is able to predict the outcomes of these games and reveals some of the complex interactions between teammates who have played together over many games. 
+We currently are considering LoL, Overwatch, and basketball datasets for this type of model.
+
+\subsection{Player Based Prediction}
+Although LoL is played as a professional esport with fixed teams, any individual can play through a matchmaking system, and in fact many pros also play this way to hone their skills and practice.
+Fortunately, there are publicly available data and match lists including each participating player from the company's API.
+From this data, we hope to glean information on how players contribute to ad-hoc teams as an individual. 
+We plan to analyze this data in isolation to make predictions about this game format while at the same time we hypothesize it will aid in our team based predictions of the same players.
+Moreover, this would allow us to model how replacing an individual player with a substitute would affect the team, or make a "dream team" of players from different teams.
+We draw inspiration from TrueSkill \cite{trueskill2}, a Bayesian model for skill (as a replacement for Elo) and hope that by conceptualizing our framework as a network with similar structure we will have a theoretical basis for training our model.
+
+% \begin{figure}[h!]
+% \centering
+% \includegraphics[width=0.5\textwidth]
+% {trueskill2_bayesian_diagram.PNG}
+% \caption{TrueSkill2 factor graph for a game between two teams}
+% \end{figure}
+
+\subsection{Micro-level Understanding}
+% Another direction we are considering investigating is a micro level understanding of the game.
+% In this model, we would be given more detailed information about a game such as kills in the game, potentially even when and where they occur; objectives and who they are secured by; and item builds/ gold difference.
+% With these extremely detailed pieces of information, we believe that a well-trained model would be able to make more accurate predictions.
+% Moreover, this kind of prediction could be done live, giving each team a percentage chance of winning as the game progresses.
+% This task can become very difficult when using all of the available data, however some options if we pursue this path are to use summarizing statistics like number of kills and gold at the 10 minute mark for instance.
+% The data we are considering for this is again League of Legends which provides public match data.
+
+Lan et al. \cite{Lan2018} use detailed game data including `` `ability', `item', `gold', and `subtype' ” to make predictions about player behavior in DOTA2, a similar game to LoL.
+Using this real time data gets their prediction accuracy all the way up to 87.9\% prediction accuracy after a decent way into the game (20 full combats).
+We consider this a baseline if we start working at the micro scale and also understand it is not possible to get near this performance using only pre-game information (0 full combats).
+In fact, their model only gets 50.6\% accuracy after 1 full combat.
+We believe this is an effect of their complex model being applied to a small amount of data, which is not what it was designed for.
+We believe we can surpass 50.6\% accuracy if we focus on pre-game predictions.
+
+\section{Preliminary Results}
+
+\subsection{Professional Teams}
+
+As we mentioned earlier, we are interested in comparing the data we gather from professional players.
+\subsubsection{Data}
+Our data source is a website that aggregates professional LoL games. The organizer, Tim Sevenhuysen, is a former professional analyst.
+They have data from 2014 to present. 
+
+\begin{table}[h!]
+    \begin{centering}
+    \begin{tabular}{|c|c|} \hline
+        Year & Games \\ \hline
+        2020 & 5821  \\ \hline
+        2019 & 6166 \\ \hline
+        2018 & 6204 \\ \hline
+        2017 & 5672 \\ \hline
+        2016 & 4218 \\ \hline
+        2015 & 1816 \\ \hline
+        2014 & 918 \\ \hline
+    \end{tabular} \\[10pt]
+    \caption{Number of games in each year of the dataset. Sources: Oracle's Elixir}
+    \end{centering}
+\end{table}
+
+The end of the current season is still under way, so a few more games will be added in the coming weeks. 
+To formulate this data into a win prediction problem required some feature engineering.
+
+\subsubsection{Feature Engineering}
+Each of theses datasets had data from each individual team member after each game, we extracted only team summary stats to start off with fewer features.
+After filtering and fitting for null values we ended up with around 30 features to describe a game. 
+Next we determined that in order to predict a game at $t_0$, we couldn't use stats from that game, we would need to use data from the previous game ($t_{-1}$). 
+Then again, there is likely more information than a team's performance in the last game alone.
+Likely there could be some added signal in the last $N$ games a team plays. 
+Therefore instead of looking only at the past game and predicting the next, we looked at the past 1, 3 and 5 games. 
+However, It is unclear how these games should weighted. 
+A random forest classifier does not have the capacity to account for time series data, so we just made a linear combination of features across games with the most recent games waited stronger than the older games. 
+Moreover, a team's \emph{relative} performance may actually be more meaningful than their raw statistics in a game. 
+Therefore, we compared using raw and relative features. 
+In all cases we normalized features based on game time and then z-score normalized all features before training and testing. 
+
+\subsubsection{Model Results}
+
+\begin{table}[h!]
+    \begin{centering}
+    \begin{tabular}{|c|c|c|c|} \hline
+        Lookback & 1 game & 3 games & 5 games \\ \hline
+        Raw & $0.563 \pm 0.009$ & $0.573 \pm 0.010$  &  $0.572 \pm 0.005$\\ \hline
+        Relative & $0.560 \pm 0.009$ & $0.569 \pm 0.008$ & $0.578 \pm 0.012$ \\ \hline
+    \end{tabular} \\[10pt]
+    \caption{Win Prediction accuracy of random forest model}
+    \end{centering}
+\end{table}
+
+We used the vanilla Random Forest Classifier from the Sklearn Python library to produce these mdoels. 
+In addition we performed 5 fold crossvalidation and pruned tree depth to prevent overfitting
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.5\textwidth]{tree_depth.PNG}
+\caption{Tree depth for the best testing accuracy was usually between 5-7}
+\end{figure}
+
+ Finally we observed the feature importance of the models using permutation feature importance to understand which were the important features for the model's prediction accuracy.
+ Five games had higher prediction accuracy, but not by much. 
+ It does appear that smoothing out the past data from 5 games may have eliminated some of the more noisy features. 
+ For example, "double kills" are the third most important feature in the 1 game lookback model but these seem much less important than the other status surrounding them like "total gold" and "towers."
+ 
+ 
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.45\textwidth]{perm_fi_1.PNG} \quad
+\includegraphics[width=0.45\textwidth]{perm_fi_5_comb.PNG}
+\caption{Permutation feature importance for 1 game (left) and 5 game (right) feature sets for the random forest model}
+\end{figure}
+
+\subsection{High Ranked Ladder}
+We also collected matches from the top $1\%$ of the ranked ladder.
+We have two main hopes in this direction.
+First, to be able to transfer the knowledge we gain from high level games with professional players to their actual stage matches.
+Second, we want to be able to predict the outcomes of ranked matches before they conclude.
+
+\subsubsection{Data}
+The dataset consists of 32,689 ranked matches occurring from *Aug 5th - Sep 16th*.
+The data was collected using the Riot Games API with python (cite both here).
+**maybe include graphic of data when digested**
+
+\subsubsection{ELO Based-Gradient Logits}
+Using the ELO method of player skill as a one dimensional feature.
+This model then assumes that the chance one player beats another is the sigmoid of the difference in their skills.
+This corresponds to each player having a logistic (approximately normal) distribution around their average skill.
+Each match is then an instance of this random variable.
+This approach has worked extremely well in chess for decades, however, in complex video games, it is clear that the myriad strengths and weaknesses of players can not be captured in one number.
+In our case, we trained the ELO values for the top 1000 players.
+Players outside this set were given a baseline zero rating.
+Training this method with gradient descent on the sampled matches ultimately yields around $51\%$ validation accuracy.
+
+\subsubsection{Naive Bayes on Champions}
+Using only the champions selected at the very beginning of the game, this approach utilizes the historical win rates of either "synergies" (same-team pairs of champions) or "adversaries" (opposite-team pairs of champions).
+It then collects over all pairs in the game to estimate each team's percentage chance of winning.
+
+In the figures below, it is very clear that this method is overfitting very hard.
+Even when normalizing by the thousands of games, the results still bias extremely heavily towards performance on the training set.
+
+
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.39\textwidth]{naive_bayes.PNG} \quad
+    \includegraphics[width=0.53\textwidth]{naive_bayes_zoomed.PNG}
+    \caption{The two Naive Bayes methods on both the training set and validation set, while varying the normalization (left) full picture (right) zoomed}
+\end{figure}
+
+\section{Deep Methods Results}
+
+\subsection{GCN-WP: Graph Convolutional Networks for Win Predicition}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\textwidth]{gcn-wp-example.png}
+\caption{Part of a GCN-WP Graph. Each node represents a team-game (one instance of a team playing a single game) and is connected to that team's opponent and their previous game.}
+\end{figure}
+
+\section{Constructing the Network}
+
+One important contribution of this project is formulating win prediction as a graphical neural network (GNN) representation. 
+Kipf's semi supervised learning on graph convolutiuonal networks was an appropriate starting point to conceptualize this problem \cite{Kipf2017}
+Given that most play at a professional level happens \emph{within} a league, it is fitting to represent each league as a discrete graph. 
+In addition, teams do change within the season, but most changes to the players happens \emph{between} seasons. 
+So our goal was to use graphs from a single season to learn a feature representations for win prediction and the apply that trained structure to the other leagues. 
+Therefore this ended up being an inductive graph classification problem.
+Each of the nodes had the same features and lables that we used in the random forest setup.
+Although this may not work for every sport/esport this process is quite generalizable with some consideration about the league structure. 
+
+\begin{table}[h!]
+    \begin{centering}
+    \begin{tabular}{|c|c|} \hline
+        League & Games \\ \hline
+        LPL & $725$  \\ \hline
+        LCK & $473$ \\ \hline
+        VCS & $304$ \\ \hline
+        PCS & $264$ \\ \hline
+        LCS & $264$ \\ \hline
+        LEC & $241$ \\ \hline
+    \end{tabular} \\[10pt]
+    \caption{Number of games in 2020 for each league. Sources: Oracle's Elixir}
+    \end{centering}
+\end{table}
+
+For the sake of simplicity we focused on the 6 major regions. 
+The Chinese league, LPL, and the most games played during the season by a factor of two, so we decided to fix this as our "training network," validate on the LCK which had the second most games, and test on the rest of the four leagues. 
+In addition, we realized that we get some benefit from the semi-supervised case because we don't have the throw out the last game each team plays -- we don't know the result of their next game, because their isn't one.
+So in this model we were actually able to integrate those games.
+One modeling assumption is that the network in homogeneous, currently there is no difference in self history nodes and opponent nodes.
+We modified the code from the GitHub repo mentioned in \cite{Kipf2017} to build the networks tested in the following section.
+
+\section{Results}
+
+\begin{table}[h!]
+    \begin{centering}
+    \begin{tabular}{|c|c|} \hline
+        \textbf{Model} & \textbf{Accuracy} \\ \hline 
+        Best RF & $0.578 \pm 0.012$  \\ \hline
+        Best GCN + delta & $0.529 \pm 0.009$  \\ \hline
+        Best GCN-cheby + no delta & $0.533 \pm 0.016$  \\ \hline
+        Best GCN-cheby + delta & $\mathbf{0.676 \pm 0.036}$ \\ \hline
+    \end{tabular} \\[10pt]
+    \caption{Number of games in each year of the dataset. Sources: Oracle's Elixir}
+    \end{centering}
+\end{table}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.95\textwidth]{gcn-train-acc-loss.png}
+    \caption{Best GCN-cheby training accuracy and loss. We did not have significant overfitting in this model}
+    \label{fig:lookahead}
+\end{figure}
+
+We performed various rounds of crossvalidation to determine the optimal features and model parameters. 
+We tested the number of nodes in the hidden layer(s) $(8,16,32)$ and the dropout rate $(0.25,0.5,0.75)$ after some initial explorations showed that the base values were optimal for our dataset. 
+It was interesting to see that using Chebyshev polynomails, although increasing compute time, significantly increased model accuracy.
+This was an interesting results especially since the original paper this method actually performed slightly worse. 
+Ensuring they were set to 1 degree meant that our network shouldn't be integrating future game data.
+Given then feature representation of this data is directly eculidean, as opposed to word vector embeddings used in the paper, the technique of spectral convolutions likely has a more meaningful impact on the analysis of a node's neighbors.
+Given the results of permutation feature importance (Figure \ref{fig:feat-imp}), we didn't feel the need to remove or reduce any of the features in the training set.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.95\textwidth]{gcn-feat-imp.png}
+    \caption{Best GCN-cheby training feature importance.}
+    \label{fig:feat-imp}
+\end{figure}
+
+We realized that some of the assumptions of the GCN framework actually limited our network structure in this problem context. 
+For example, a graph convolution integrates data from the immidiate neighborhood of a node. 
+However, this graph is not directly encoded to be directional (although the adjacency matrix is asymmetrical).
+Therefore, if we have more than one graph convolution, we could effectively be allowing our network to look in to the future. 
+To exemplify this, this Figure \ref{fig:lookahead} shows that a two layer network has much higher prediction accuracy for a one-game lookahead. 
+A "fair" prediction for a two layer GCN would actually be predicting two games ahead.
+Looking further into the future further reduces the accuracy of this network, but is still better than random.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.95\textwidth]{gcn-acc-lookahead.png}
+    \caption{Various accuracy measures for a two layer GCN with different number of games lookahead}
+    \label{fig:lookahead}
+\end{figure}
+
+
+\section{Conclusions}
+
+This work is a breakthrough in win prediction modeling in given that we do not explicitly model a single team over time, but instead learn a representation of a league structure and use that representation to predict success of teams in other leagues. 
+Although this use cause is particularly well suited to League of Legends, this has applicability to other esports, like the Overwatch League, Counter Strike: Global Offenseive, or even sports like Baseball or Basketball which have international leagues.
+
+\section{Future Work}
+
+Although we looked at win prediction agnostic of following a particular team over time, a good way to integrate this data would be to actually use a team's TrueSkill rating as a score feature.
+Given that without taking specific teams into consideration our model is already close to TrueSkill's accuracy, this could have the potential to boost performance quite a bit. 
+In addition, we plan to expand the expressiveness of this model by using a heterogeneous (and directed) GCN model to represent the data. 
+%%% add citation for het GCN here %
+This will enable us to use more convolutional layers without the risk of leakage.
+
+
+\iffalse
+Our original goal was to incorporate word embeddings into a deep model of both each player and each champion.
+In this way, the hope was that we would be able to get an above $50\%$ accuracy in prediction of the game outcome before the game even started!
+
+Insofar, this method has been too difficult to train, hovering around the $50\%$ mark, essentially learning nothing.
+Inexperience with word embeddings is likely a contributor, however we have tried training both in parallel with the deep model and independent of the model.  
+Nothing has been fruitful as of yet.
+Our intentions are to try to continue with this deep method.
+A possible suggestion we have received is to handcraft the embeddings ourselves to be able to apply the deep model.
+From there, we can further tweak to see if we can get a model to generate embeddings of its own.
+This is our most likely course of action.
+\fi
+
+
+\printbibliography
+
+\end{document}

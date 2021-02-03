@@ -61,6 +61,7 @@ class Layer(object):
             name = layer + '_' + str(get_layer_uid(layer))
         self.name = name
         self.vars = {}
+        self.weights = []
         logging = kwargs.get('logging', False)
         self.logging = logging
         self.sparse_inputs = False
@@ -104,6 +105,7 @@ class Dense(Layer):
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = glorot([input_dim, output_dim],
                                           name='weights')
+            self.weights = self.vars['weights']
             if self.bias:
                 self.vars['bias'] = zeros([output_dim], name='bias')
 
@@ -120,6 +122,7 @@ class Dense(Layer):
             x = tf.nn.dropout(x, 1-self.dropout)
 
         # transform
+        self.weights = self.vars['weights']
         output = dot(x, self.vars['weights'], sparse=self.sparse_inputs)
 
         # bias
