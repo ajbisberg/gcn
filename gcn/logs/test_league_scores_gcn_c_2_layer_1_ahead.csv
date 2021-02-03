@@ -1,3 +1,0 @@
-league,model,layer_count,dropout,cost,acc
-LCS,gcn_cheby,32,0.25,0.3374899923801422,0.8745200037956238
-LEC,gcn_cheby,32,0.25,0.297789990901947,0.8898299932479858

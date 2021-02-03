@@ -5,7 +5,10 @@
 tmp/
 *.txt
 !requirements.txt
+
+# Data folders
 gcn/data/*
+gcn/logs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
